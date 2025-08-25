@@ -1,0 +1,142 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<h2>Generate Chart</h2>
+<div class="input-group mb-3" style="max-width: 600px;">
+    <input type="text" id="promptInput" class="form-control" placeholder="Describe your chart, e.g. bar chart of monthly revenue">
+    <button id="generateBtn" class="btn btn-primary" onclick="onGenerateClick()">Generate</button>
+</div>
+<div id="loadingSpinner" style="display:none; text-align:center; margin-top:20px;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p>Generating chart...</p>
+</div>
+
+<div id="chartWrapper">
+    <div id="chartContainer" style="height: 400px; margin-top: 30px;"></div>
+</div>
+
+<script src="https://code.highcharts.com/highcharts.js"></script>
+
+<script>
+    let currentPrompt = null;
+    let currentChartConfig = null;
+
+    async function onGenerateClick() {
+        const prompt = document.getElementById('promptInput').value.trim();
+        if (!prompt) {
+            alert("Please enter a chart description.");
+            return;
+        }
+
+        if (isNewChartRequest(prompt)) {
+            // New chart request
+            await generateChartFromPrompt(prompt);
+            currentPrompt = prompt;
+        } else {
+            // Update existing chart if exists, else new chart
+            if (currentChartConfig) {
+                await updateChartWithPrompt(prompt, currentChartConfig);
+                currentPrompt = prompt;
+            } else {
+                await generateChartFromPrompt(prompt);
+                currentPrompt = prompt;
+            }
+        }
+    }
+
+    function isNewChartRequest(prompt) {
+        const lower = prompt.toLowerCase();
+        return lower.includes("new chart") || lower.includes("start over") || lower.includes("new bar chart") || lower.includes("new line chart");
+    }
+
+        function clearCurrentChart() {
+        if (currentChartConfig) {
+            Highcharts.chart('chartContainer', null); 
+            currentChartConfig = null;
+        }
+    }
+
+     async function generateChartFromPrompt(prompt) {
+        const spinner = document.getElementById('loadingSpinner');
+        const chartWrapper = document.getElementById('chartWrapper');
+
+        // Remove chartContainer div entirely before loading
+        chartWrapper.innerHTML = '';
+
+        // Show spinner
+        spinner.style.display = 'block';
+
+        try {
+            const response = await fetch('/Home/GenerateChartAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                chartWrapper.innerHTML = `<div class="alert alert-danger">Error: ${errorText}</div>`;
+                return;
+            }
+
+            const data = await response.json();
+
+            // Add the chart container div back fresh
+            chartWrapper.innerHTML = '<div id="chartContainer" style="height: 400px; margin-top: 30px;"></div>';
+
+            currentChartConfig = data.chartJs;
+
+            Highcharts.chart('chartContainer', currentChartConfig);
+
+        } catch (error) {
+            chartWrapper.innerHTML = `<div class="alert alert-danger">Unexpected error: ${error.message}</div>`;
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+
+       async function updateChartWithPrompt(prompt, currentConfig) {
+        const spinner = document.getElementById('loadingSpinner');
+        const chartWrapper = document.getElementById('chartWrapper');
+        chartWrapper.innerHTML = '';
+
+        spinner.style.display = 'block';
+
+        try {
+            const response = await fetch('/Home/UpdateChartAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instruction: prompt,
+                    currentConfig: currentConfig
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                chartWrapper.innerHTML = `<div class="alert alert-danger">Error: ${errorText}</div>`;
+                return;
+            }
+
+            const data = await response.json();
+
+            // Add the chart container div back fresh
+            chartWrapper.innerHTML = '<div id="chartContainer" style="height: 400px; margin-top: 30px;"></div>';
+
+            currentChartConfig = data.chartJs;
+
+            Highcharts.chart('chartContainer', currentChartConfig);
+
+        } catch (error) {
+            chartWrapper.innerHTML = `<div class="alert alert-danger">Unexpected error: ${error.message}</div>`;
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+
+</script>
